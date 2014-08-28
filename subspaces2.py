@@ -5,17 +5,61 @@ import time
 from scipy import sparse
 import pickle
 
-def mod2rank(M, in_place=False):
+def dense_mod2rank(M, in_place=False):
+  M = np.array(M, copy=not in_place)
+  # fuck = sparse.lil_matrix(M)
+
   for index, column in enumerate(M.T):
-    nonzero_rows = column.tocoo().col
-    assert all(column.T[nonzero_rows] == 1)
+    nonzero_rows = np.flatnonzero(column)
+    # shit = fuck.T[index].tocsr()
+    # shit.eliminate_zeros()
+    # shit = shit.indices
+    # assert (fuck[shit,index].A==1).all()
+    # assert ((shit==nonzero_rows).all())
+
+    if any(nonzero_rows):
+      first_one, other_ones = ( nonzero_rows[0], 
+                                nonzero_rows[1:] )
+      M[other_ones] = (M[other_ones]+M[first_one])%2
+      M[first_one, index+1:] = 0
+
+      # for row in other_ones:
+      #   fuck[row] = fuck[row]+fuck[first_one]
+      #   fuck.data[row] = [i%2 for i in fuck[row].data[0]]
+      #   assert (np.array(fuck[row].data[0])<2).all()
+      # fuck[first_one,index+1:]=0
+      # if not ((M == fuck.toarray()).all()):
+      #   import pdb; pdb.set_trace()
+  return M.sum()
+
+def mod2rank(M, in_place=False):
+  # fuck = M.toarray()
+
+  for index in xrange(M.shape[1]):
+    # this conversion is linear in num_cols each time. not great but
+    # not terrible... might be able to forgo completely actually by
+    # using csr throughout...
+    shit = M.T[index].tocsr()
+
+    shit.eliminate_zeros() 
+    # necessary to make sure nonzero_rows are what they are
+
+    nonzero_rows = shit.indices
     if any(nonzero_rows):
       first_one, other_ones = ( nonzero_rows[0], 
                                 nonzero_rows[1:] )
       for row in other_ones:
         M[row] = M[row]+M[first_one]
-        M[row].data = [[i%2 for i in M[row].data[0]]]
+        M.data[row] = [i%2 for i in M[row].data[0]]
+        #assert (np.array(M[row].data[0])<2).all()
+
+      # fuck[other_ones] = (fuck[other_ones]+fuck[first_one])%2
+      # assert not (fuck == M.toarray()).all()
+
       M[first_one, index+1:] = 0
+      # fuck[first_one,index+1:]=0
+
+  # assert (fuck==M.toarray()).all()
   return M.sum()
 
 class Space:
@@ -167,13 +211,10 @@ def compute_rank(containment,lagrangians,triangles):
   rows,cols = np.array([(triangle2index[i],
                          lagrangian2index[j])
                         for i,j in containment]).reshape(num_ones,2).T
-  matrix = sparse.coo_matrix(
-    (np.ones(num_ones),(rows,cols)), 
-    shape=(t,l),dtype=int)
-  
-
+  matrix = sparse.coo_matrix((np.ones(num_ones),(rows,cols)), shape=(t,l),dtype=int)
   # print matrix
   print "result", len(lagrangians) - mod2rank(matrix.tolil())
+  # print len(lagrangians) - dense_mod2rank(matrix.toarray())
   print "that took", time.time()-start
 
   test_two(containment)
