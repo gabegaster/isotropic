@@ -156,14 +156,6 @@ def big_perp(S):
     return (i for i in makevectors(2*GENUS) 
             if S.orthogonal_to(i) and not i in S)
 
-def test_one(matrix):
-    assert all(matrix.sum(1)==3)
-def test_two(containment):
-    x,y = next(iter(containment))
-    assert x<y
-
-GENUS=3
-
 def get_data():
   isotropics = [ set([zerospace(2*GENUS)]) ]
   containment= set()
@@ -217,8 +209,16 @@ def compute_rank(containment,lagrangians,triangles):
   # print len(lagrangians) - dense_mod2rank(matrix.toarray())
   print "that took", time.time()-start
 
-  test_two(containment)
-  test_one(matrix)
+  tests(matrix,containment)
+
+def tests(matrix,containment):
+    assert (matrix.sum(1)==3).all()
+    assert (matrix.sum(0)==2**GENUS-1).all()
+
+    x,y = next(iter(containment))
+    assert x<y
+
+GENUS=3
 
 if __name__=="__main__":
   data = get_data()
