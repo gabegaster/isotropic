@@ -1,9 +1,14 @@
-from itertools import combinations, product
-import numpy as np
-import csv
+# base packages
 import time
-from scipy import sparse
 import pickle
+from itertools import combinations, product, izip
+
+# 3rd party
+import numpy as np
+from scipy import sparse
+
+# gabe's tool
+from timer import show_progress, get_time_str
 
 def dense_mod2rank(M, in_place=False):
   M = np.array(M, copy=not in_place)
@@ -30,16 +35,15 @@ def dense_mod2rank(M, in_place=False):
       # fuck[first_one,index+1:]=0
       # if not ((M == fuck.toarray()).all()):
       #   import pdb; pdb.set_trace()
-  return M.sum()
+  return M.shape[1] - M.sum()
 
 def mod2rank(M, in_place=False):
   # fuck = M.toarray()
-
-  for index in xrange(M.shape[1]):
+  for column in show_progress(xrange(M.shape[1])):
     # this conversion is linear in num_cols each time. not great but
     # not terrible... might be able to forgo completely actually by
     # using csr throughout...
-    shit = M.T[index].tocsr()
+    shit = M.T[column].tocsr()
 
     shit.eliminate_zeros() 
     # necessary to make sure nonzero_rows are what they are
@@ -56,11 +60,11 @@ def mod2rank(M, in_place=False):
       # fuck[other_ones] = (fuck[other_ones]+fuck[first_one])%2
       # assert not (fuck == M.toarray()).all()
 
-      M[first_one, index+1:] = 0
-      # fuck[first_one,index+1:]=0
+      M[first_one, column+1:] = 0
+      # fuck[first_one,column+1:]=0
 
   # assert (fuck==M.toarray()).all()
-  return M.sum()
+  return M.shape[1] - M.sum()
 
 class Space:
     def __init__(self,M):
@@ -180,36 +184,33 @@ def get_data():
           
   lagrangians = list(isotropics[-1])
   triangles = list(isotropics[-2])
-  with open("isotropic_subspaces_%s.pkl"%GENUS,'w') as f:
-    pickle.dump({"containment":containment,
-                 "lagrangians":lagrangians,
-                 "triangles":triangles},f)
-  print "done with data", time.time()-start
+  print "done with data", get_time_str(time.time()-start)
   return containment,lagrangians,triangles
 
-def compute_rank(containment,lagrangians,triangles):
+def build_matrix(containment,lagrangians,triangles):
   start = time.time()
-  l = len(lagrangians)
-  t = len(triangles)
+  shape = len(triangles), len(lagrangians)
+  print "triangles,lagrangians = ",shape
 
   # matrix = sparse.coo_matrix((t,l),dtype=int)
-  
-  lagrangian2index = dict(zip(lagrangians,xrange(l)))
-  triangle2index   = dict(zip(triangles,xrange(t)))
+
+  triangle2row   = dict(izip(triangles,xrange(shape[0])))
+  lagrangian2col = dict(izip(lagrangians,xrange(shape[1])))
+
   # for triangle,lagrangian in containment:
   #     matrix[triangle2index  [triangle],
   #            lagrangian2index[lagrangian]] = 1
   num_ones = len(containment)
-  rows,cols = np.array([(triangle2index[i],
-                         lagrangian2index[j])
+  rows,cols = np.array([(triangle2row[i],
+                         lagrangian2col[j])
                         for i,j in containment]).reshape(num_ones,2).T
-  matrix = sparse.coo_matrix((np.ones(num_ones),(rows,cols)), shape=(t,l),dtype=int)
-  # print matrix
-  print "result", len(lagrangians) - mod2rank(matrix.tolil())
-  # print len(lagrangians) - dense_mod2rank(matrix.toarray())
-  print "that took", time.time()-start
+  matrix = sparse.coo_matrix((np.ones(num_ones),(rows,cols)), shape=shape,dtype=int)
+  print "building matrix took", get_time_str(time.time()-start)
 
-  tests(matrix,containment)
+  with open("isotropic_subspaces_%s.pkl"%GENUS,'w') as f:
+    pickle.dump(matrix,f)
+
+  return matrix
 
 def tests(matrix,containment):
     assert (matrix.sum(1)==3).all()
@@ -222,4 +223,6 @@ GENUS=3
 
 if __name__=="__main__":
   data = get_data()
-  compute_rank(*data)
+  matrix = build_matrix(*data)
+  print "result", mod2rank(matrix.tolil())
+  tests(matrix,data[0])
