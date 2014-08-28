@@ -16,7 +16,7 @@ def mod2rank(M, in_place=False):
 
 class Space:
     def __init__(self,M):
-        self.length = len(M[0])               # fails for empty input
+        self.length = len(M[0])           # fails for empty input
         self.rank = 0
         self.basis = np.array([np.zeros(self.length)],dtype=int) #include an extra row of zeros to detect zero space
         self.pivots = np.array([self.length]) #add an extra pivot for the row of zeros
@@ -46,19 +46,22 @@ class Space:
         T.pivots = self.pivots
         return T
        
-    def containsvector(self,vector):
-        guess = sum(self.basis[i]*vector[self.pivots[i]] 
-                    for i in range(self.rank) )%2
+    def __contains__(self,vector):
+        # guess = sum(self.basis[i]*vector[self.pivots[i]] 
+        #                 for i in xrange(self.rank) )%2
+        guess = (vector[self.pivots[:self.rank]] * 
+                 self.basis[:self.rank].T).T.sum(0)%2
+        # assert np.array_equal(guess_old,guess)
         return np.array_equal(vector,guess)
  
     def orthogonal_to(self,vector):
         return all(orthogonal(vector,x) for x in self.basis)
 
     def __gt__(self, space):
-        return all(self.containsvector(v) for v in space.basis)      
+        return all(v in self for v in space.basis)      
  
     def __lt__(self, space):
-        return self > space
+        return space > self
  
     def __eq__(self, N):
         return np.array_equal(self.basis,N.basis)
@@ -101,33 +104,48 @@ def perp(S):
         return (np.array([0]*p+list(v)) for v in makevectors(S.length-p)
                 if S.orthogonal_to(np.array([0]*p+list(v))))
 
-g=5
+def big_perp(S):
+    return (i for i in makevectors(2*g) 
+            if S.orthogonal_to(i) and not i in S)
+
+def test_one(matrix):
+    assert all(matrix.sum(1)==3)
+def test_two(containment):
+    x,y = next(iter(containment))
+    assert x<y
+
+g=3
 isotropics = [ set([zerospace(2*g)]) ]
-containment= []
+containment= set()
 
 start = time.time()
 
 for r in range(0,g):
     print "genus",r
     isotropics.append(set())
-    containment.append(set())
     for S in isotropics[r]:
 #       print S.basis, map(list,perp(S))
-        for v in perp(S):
-            T = span(S,np.array(v))
-            isotropics[r+1].add(T)
-            containment[r].add((S,T))
+        if r < g-1:
+            for v in perp(S):
+                T = span(S,np.array(v))
+                isotropics[r+1].add(T)
+        else:
+            for v in big_perp(S):
+                T = span(S,v)
+                isotropics[r+1].add(T)
+                containment.add((S,T))
 
-vectors = makevectors(2*g)
-lagrangians = list(isotropics[g])
-triangles = list(isotropics[g-1])
+
+lagrangians = list(isotropics[-1])
+triangles = list(isotropics[-2])
 l = len(lagrangians)
 t = len(triangles)
 matrix = np.zeros((t,l),dtype=int)
+other = np.zeros((t,l),dtype=int)
 
 lagrangian2index = dict(zip(lagrangians,xrange(l)))
 triangle2index   = dict(zip(triangles,xrange(t)))
-for triangle,lagrangian in containment[g-1]:
+for triangle,lagrangian in containment:
     matrix[triangle2index  [triangle],
            lagrangian2index[lagrangian]] = 1
 
@@ -136,9 +154,5 @@ print "done with matrix", time.time()-start
 print "result", len(lagrangians) - mod2rank(matrix)
 print "that took", time.time()-start
 
-def test_one(matrix):
-    assert all(matrix.sum(1)==3)
-def test_two(containment):
-    x,y = next(iter(containment[-1]))
-    assert x<y or y<x
-    
+test_two(containment)
+test_one(matrix)
