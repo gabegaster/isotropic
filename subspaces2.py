@@ -2,15 +2,19 @@ from itertools import combinations, product
 import numpy as np
 import csv
 import time
+from scipy import sparse
+import pickle
 
 def mod2rank(M, in_place=False):
-  M = np.array(M, copy=not in_place)
   for index, column in enumerate(M.T):
-    nonzero_rows = np.flatnonzero(column)
+    nonzero_rows = column.tocoo().col
+    assert all(column.T[nonzero_rows] == 1)
     if any(nonzero_rows):
       first_one, other_ones = ( nonzero_rows[0], 
                                 nonzero_rows[1:] )
-      M[other_ones] = (M[other_ones]+M[first_one])%2
+      for row in other_ones:
+        M[row] = M[row]+M[first_one]
+        M[row].data = [[i%2 for i in M[row].data[0]]]
       M[first_one, index+1:] = 0
   return M.sum()
 
@@ -105,7 +109,7 @@ def perp(S):
                 if S.orthogonal_to(np.array([0]*p+list(v))))
 
 def big_perp(S):
-    return (i for i in makevectors(2*g) 
+    return (i for i in makevectors(2*GENUS) 
             if S.orthogonal_to(i) and not i in S)
 
 def test_one(matrix):
@@ -114,45 +118,67 @@ def test_two(containment):
     x,y = next(iter(containment))
     assert x<y
 
-g=3
-isotropics = [ set([zerospace(2*g)]) ]
-containment= set()
+GENUS=3
 
-start = time.time()
+def get_data():
+  isotropics = [ set([zerospace(2*GENUS)]) ]
+  containment= set()
 
-for r in range(0,g):
-    print "genus",r
+  start = time.time()
+  
+  for r in range(0,GENUS):
+    print "computing dim",r
     isotropics.append(set())
     for S in isotropics[r]:
-#       print S.basis, map(list,perp(S))
-        if r < g-1:
-            for v in perp(S):
-                T = span(S,np.array(v))
-                isotropics[r+1].add(T)
-        else:
-            for v in big_perp(S):
-                T = span(S,v)
-                isotropics[r+1].add(T)
-                containment.add((S,T))
+      #       print S.basis, map(list,perp(S))
+      if r < GENUS-1:
+        for v in perp(S):
+          T = span(S,np.array(v))
+          isotropics[r+1].add(T)
+      else:
+        for v in big_perp(S):
+          T = span(S,v)
+          isotropics[r+1].add(T)
+          containment.add((S,T))
 
+          
+  lagrangians = list(isotropics[-1])
+  triangles = list(isotropics[-2])
+  with open("isotropic_subspaces_%s.pkl"%GENUS,'w') as f:
+    pickle.dump({"containment":containment,
+                 "lagrangians":lagrangians,
+                 "triangles":triangles},f)
+  print "done with data", time.time()-start
+  return containment,lagrangians,triangles
 
-lagrangians = list(isotropics[-1])
-triangles = list(isotropics[-2])
-l = len(lagrangians)
-t = len(triangles)
-matrix = np.zeros((t,l),dtype=int)
-other = np.zeros((t,l),dtype=int)
+def compute_rank(containment,lagrangians,triangles):
+  start = time.time()
+  l = len(lagrangians)
+  t = len(triangles)
 
-lagrangian2index = dict(zip(lagrangians,xrange(l)))
-triangle2index   = dict(zip(triangles,xrange(t)))
-for triangle,lagrangian in containment:
-    matrix[triangle2index  [triangle],
-           lagrangian2index[lagrangian]] = 1
+  # matrix = sparse.coo_matrix((t,l),dtype=int)
+  
+  lagrangian2index = dict(zip(lagrangians,xrange(l)))
+  triangle2index   = dict(zip(triangles,xrange(t)))
+  # for triangle,lagrangian in containment:
+  #     matrix[triangle2index  [triangle],
+  #            lagrangian2index[lagrangian]] = 1
+  num_ones = len(containment)
+  rows,cols = np.array([(triangle2index[i],
+                         lagrangian2index[j])
+                        for i,j in containment]).reshape(num_ones,2).T
+  matrix = sparse.coo_matrix(
+    (np.ones(num_ones),(rows,cols)), 
+    shape=(t,l),dtype=int)
+  
 
-print "done with matrix", time.time()-start
-# print matrix
-print "result", len(lagrangians) - mod2rank(matrix)
-print "that took", time.time()-start
+  # print matrix
+  print "result", len(lagrangians) - mod2rank(matrix.tolil())
+  print "that took", time.time()-start
 
-test_two(containment)
-test_one(matrix)
+  test_two(containment)
+  test_one(matrix)
+
+if __name__=="__main__":
+  data = get_data()
+  compute_rank(*data)
