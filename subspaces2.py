@@ -124,8 +124,8 @@ class Space:
         return hash(tuple(map(tuple,self.basis)))
 
 def pivot(vector):
-    for i in range(len(vector)):
-        if vector[i]!=0:
+    for i,v in enumerate(vector):
+        if v!=0:
             return i
     return -1
     
@@ -143,7 +143,7 @@ def span(S,vector):
     T.includevector(vector)
     return T
 
-def makevectors(length):
+def itervectors(length):
     return (np.array(m) for m in product(*( [range(2)]*length ))
             if pivot(m)!=-1)
 
@@ -152,40 +152,41 @@ def zerospace(k):
 
 def perp(S):
     if S == zerospace(S.length):
-        return makevectors(S.length)
-    else:
+        return itervectors(S.length)
+    elif S.length < 2*GENUS :
+        # cut down onthe search space for lower dimensions by
+        # restricting with pivot
         p = S.pivots[-2]+1
-        return (np.array([0]*p+list(v)) for v in makevectors(S.length-p)
-                if S.orthogonal_to(np.array([0]*p+list(v))))
-
-def big_perp(S):
-    return (i for i in makevectors(2*GENUS) 
-            if S.orthogonal_to(i) and not i in S)
+        tmp = (np.array([0]*p+list(v)) for v in itervectors(S.length-p))
+        return (i for i in tmp if S.orthogonal_to(i))
+    else:
+        return (i for i in itervectors(2*GENUS) 
+                if S.orthogonal_to(i) and not i in S)
 
 def get_data():
-  isotropics = [ set([zerospace(2*GENUS)]) ]
-  containment= set()
-
   start = time.time()
+
+  lagrangians = set([zerospace(2*GENUS)])
+  containment= set()
   
   for r in range(0,GENUS):
+    triangles = lagrangians
+    lagrangians = set()
     print "computing dim",r
-    isotropics.append(set())
-    for S in show_progress(isotropics[r]):
+    for S in show_progress(triangles):
       #       print S.basis, map(list,perp(S))
       if r < GENUS-1:
         for v in perp(S):
-          T = span(S,np.array(v))
-          isotropics[r+1].add(T)
+          T = span(S,v)
+          lagrangians.add(T)
       else:
         for v in big_perp(S):
           T = span(S,v)
-          isotropics[r+1].add(T)
+          lagrangians.add(T)
           containment.add((S,T))
 
-          
-  lagrangians = list(isotropics[-1])
-  triangles = list(isotropics[-2])
+  triangles,lagrangians = list(triangles),list(lagrangians)
+
   print "done with data", get_time_str(time.time()-start)
   return containment,lagrangians,triangles
 
@@ -193,11 +194,8 @@ def build_matrix(containment,lagrangians,triangles):
   start = time.time()
   shape = len(triangles), len(lagrangians)
   print "triangles,lagrangians = ",shape
-
-  # matrix = sparse.coo_matrix((t,l),dtype=int)
-
-  triangle2row   = dict(izip(triangles,xrange(shape[0])))
-  lagrangian2col = dict(izip(lagrangians,xrange(shape[1])))
+  triangle2row   = dict(izip(triangles,xrange(10**100)))
+  lagrangian2col = dict(izip(lagrangians,xrange(10**100)))
 
   # for triangle,lagrangian in containment:
   #     matrix[triangle2index  [triangle],
@@ -221,7 +219,7 @@ def tests(matrix,containment):
     x,y = next(iter(containment))
     assert x<y
 
-GENUS=5
+GENUS=4
 
 if __name__=="__main__":
   data = get_data()
