@@ -13,60 +13,58 @@ from timer import show_progress, get_time_str
 # OLD -- works, but makes matrix dense. this wont work for
 # genus>4. Useful for testing.
 def dense_mod2rank(M, in_place=False):
-  M = np.array(M, copy=not in_place)
-  # fuck = sparse.lil_matrix(M)
+    M = np.array(M, copy=not in_place)
+    # fuck = sparse.lil_matrix(M)
 
-  for index, column in enumerate(M.T):
-    nonzero_rows = np.flatnonzero(column)
-    # shit = fuck.T[index].tocsr()
-    # shit.eliminate_zeros()
-    # shit = shit.indices
-    # assert (fuck[shit,index].A==1).all()
-    # assert ((shit==nonzero_rows).all())
+    for index, column in enumerate(M.T):
+        nonzero_rows = np.flatnonzero(column)
+        # shit = fuck.T[index].tocsr()
+        # shit.eliminate_zeros()
+        # shit = shit.indices
+        # assert (fuck[shit,index].A==1).all()
+        # assert ((shit==nonzero_rows).all())
 
     if any(nonzero_rows):
-      first_one, other_ones = ( nonzero_rows[0], 
-                                nonzero_rows[1:] )
-      M[other_ones] = (M[other_ones]+M[first_one])%2
-      M[first_one, index+1:] = 0
+        first_one, other_ones = ( nonzero_rows[0], 
+                                  nonzero_rows[1:] )
+        M[other_ones] = (M[other_ones]+M[first_one])%2
+        M[first_one, index+1:] = 0
 
-      # for row in other_ones:
-      #   fuck[row] = fuck[row]+fuck[first_one]
-      #   fuck.data[row] = [i%2 for i in fuck[row].data[0]]
-      #   assert (np.array(fuck[row].data[0])<2).all()
-      # fuck[first_one,index+1:]=0
-      # if not ((M == fuck.toarray()).all()):
-      #   import pdb; pdb.set_trace()
-  return M.shape[1] - M.sum()
-
+        # for row in other_ones:
+        #   fuck[row] = fuck[row]+fuck[first_one]
+        #   fuck.data[row] = [i%2 for i in fuck[row].data[0]]
+        #   assert (np.array(fuck[row].data[0])<2).all()
+        # fuck[first_one,index+1:]=0
+        # if not ((M == fuck.toarray()).all()):
+        #   import pdb; pdb.set_trace()
+        return M.shape[1] - M.sum()
+        
 def mod2rank(M, in_place=False):
-  # fuck = M.toarray()
-  for column in show_progress(xrange(M.shape[1])):
-    # this conversion is linear in num_cols each time. not great but
-    # not terrible... might be able to forgo completely actually by
-    # using csr throughout...
-    shit = M.T[column].tocsr()
+    # fuck = M.toarray()
+    for column in show_progress(xrange(M.shape[1])):
+        # this conversion is linear in num_cols each time. not great but
+        # not terrible... might be able to forgo completely actually by
+        # using csr throughout...
+        shit = M.T[column].tocsr()
 
-    shit.eliminate_zeros() 
-    # necessary to make sure nonzero_rows are what they are
+        shit.eliminate_zeros() 
+        # necessary to make sure nonzero_rows are what they are
 
-    nonzero_rows = shit.indices
-    if any(nonzero_rows):
-      first_one, other_ones = ( nonzero_rows[0], 
-                                nonzero_rows[1:] )
-      for row in other_ones:
-        M[row] = M[row]+M[first_one]
-        M.data[row] = [i%2 for i in M[row].data[0]]
-        #assert (np.array(M[row].data[0])<2).all()
+        nonzero_rows = shit.indices
+        if any(nonzero_rows):
+            first_one, other_ones = ( nonzero_rows[0], 
+                                      nonzero_rows[1:] )
+            for row in other_ones:
+                M[row] = M[row]+M[first_one]
+                M.data[row] = [i%2 for i in M[row].data[0]]
+                #assert (np.array(M[row].data[0])<2).all()
+            # fuck[other_ones] = (fuck[other_ones]+fuck[first_one])%2
+            # assert not (fuck == M.toarray()).all()
+            M[first_one, column+1:] = 0
+            # fuck[first_one,column+1:]=0
 
-      # fuck[other_ones] = (fuck[other_ones]+fuck[first_one])%2
-      # assert not (fuck == M.toarray()).all()
-
-      M[first_one, column+1:] = 0
-      # fuck[first_one,column+1:]=0
-
-  # assert (fuck==M.toarray()).all()
-  return M.shape[1] - M.sum()
+    # assert (fuck==M.toarray()).all()
+    return M.shape[1] - M.sum()
 
 class Space:
     def __init__(self,M):
@@ -164,53 +162,49 @@ def perp(S):
                 if S.orthogonal_to(i) and not i in S)
 
 def get_data():
-  start = time.time()
+    start = time.time()
 
-  lagrangians = set([zerospace(2*GENUS)])
-  containment= set()
+    lagrangians = set([zerospace(2*GENUS)])
+    containment= set()
   
-  for r in range(0,GENUS):
-    triangles = lagrangians
-    lagrangians = set()
-    print "computing dim",r
-    for S in show_progress(triangles):
-      #       print S.basis, map(list,perp(S))
-      if r < GENUS-1:
-        for v in perp(S):
-          T = span(S,v)
-          lagrangians.add(T)
-      else:
-        for v in big_perp(S):
-          T = span(S,v)
-          lagrangians.add(T)
-          containment.add((S,T))
+    for r in range(0,GENUS):
+        triangles = lagrangians
+        lagrangians = set()
+        print "computing dim",r
+        for S in show_progress(triangles):
+            #       print S.basis, map(list,perp(S))
+            for v in perp(S):
+                T = span(S,v)
+                lagrangians.add(T)
+                if r==GENUS-1:
+                    containment.add((S,T))
 
-  triangles,lagrangians = list(triangles),list(lagrangians)
+    triangles,lagrangians = list(triangles),list(lagrangians)
 
-  print "done with data", get_time_str(time.time()-start)
-  return containment,lagrangians,triangles
+    print "done with data", get_time_str(time.time()-start)
+    return containment,lagrangians,triangles
 
 def build_matrix(containment,lagrangians,triangles):
-  start = time.time()
-  shape = len(triangles), len(lagrangians)
-  print "triangles,lagrangians = ",shape
-  triangle2row   = dict(izip(triangles,xrange(10**100)))
-  lagrangian2col = dict(izip(lagrangians,xrange(10**100)))
+    start = time.time()
+    shape = len(triangles), len(lagrangians)
+    print "triangles,lagrangians = ",shape
+    triangle2row   = dict(izip(triangles,xrange(10**100)))
+    lagrangian2col = dict(izip(lagrangians,xrange(10**100)))
 
-  # for triangle,lagrangian in containment:
-  #     matrix[triangle2index  [triangle],
-  #            lagrangian2index[lagrangian]] = 1
-  num_ones = len(containment)
-  rows,cols = np.array([(triangle2row[i],
-                         lagrangian2col[j])
-                        for i,j in containment]).reshape(num_ones,2).T
-  matrix = sparse.coo_matrix((np.ones(num_ones),(rows,cols)), shape=shape,dtype=int)
-  print "building matrix took", get_time_str(time.time()-start)
+    # for triangle,lagrangian in containment:
+    #     matrix[triangle2index  [triangle],
+    #            lagrangian2index[lagrangian]] = 1
+    num_ones = len(containment)
+    rows,cols = np.array([(triangle2row[i],
+                           lagrangian2col[j])
+                          for i,j in containment]).reshape(num_ones,2).T
+    matrix = sparse.coo_matrix((np.ones(num_ones),(rows,cols)), shape=shape,dtype=int)
+    print "building matrix took", get_time_str(time.time()-start)
 
-  with open("isotropic_subspaces_%s.pkl"%GENUS,'w') as f:
-    pickle.dump(matrix,f)
+    with open("isotropic_subspaces_%s.pkl"%GENUS,'w') as f:
+        pickle.dump(matrix,f)
 
-  return matrix
+    return matrix
 
 def tests(matrix,containment):
     assert (matrix.sum(1)==3).all()
@@ -222,7 +216,7 @@ def tests(matrix,containment):
 GENUS=4
 
 if __name__=="__main__":
-  data = get_data()
-  matrix = build_matrix(*data)
-  print "result", mod2rank(matrix.tolil())
-  tests(matrix,data[0])
+    data = get_data()
+    matrix = build_matrix(*data)
+    print "result", mod2rank(matrix.tolil())
+    tests(matrix,data[0])
