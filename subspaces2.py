@@ -10,6 +10,8 @@ from scipy import sparse
 # gabe's tool
 from timer import show_progress, get_time_str
 
+# OLD -- works, but makes matrix dense. this wont work for
+# genus>4. Useful for testing.
 def dense_mod2rank(M, in_place=False):
   M = np.array(M, copy=not in_place)
   # fuck = sparse.lil_matrix(M)
@@ -169,7 +171,7 @@ def get_data():
   for r in range(0,GENUS):
     print "computing dim",r
     isotropics.append(set())
-    for S in isotropics[r]:
+    for S in show_progress(isotropics[r]):
       #       print S.basis, map(list,perp(S))
       if r < GENUS-1:
         for v in perp(S):
@@ -219,7 +221,7 @@ def tests(matrix,containment):
     x,y = next(iter(containment))
     assert x<y
 
-GENUS=3
+GENUS=5
 
 if __name__=="__main__":
   data = get_data()
