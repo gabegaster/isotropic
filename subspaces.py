@@ -1,7 +1,7 @@
 # base packages
 import time
 import pickle
-from itertools import combinations, product, izip
+from itertools import combinations, product, izip, count
 
 # 3rd party
 import numpy as np
@@ -41,6 +41,7 @@ def dense_mod2rank(M, in_place=False):
         
 def mod2rank(M, in_place=False):
     # fuck = M.toarray()
+    print "computing rank"
     for column in show_progress(xrange(M.shape[1])):
         # this conversion is linear in num_cols each time. not great but
         # not terrible... might be able to forgo completely actually by
@@ -179,21 +180,17 @@ def get_data():
                 if r==GENUS-1:
                     containment.add((S,T))
 
-    triangles,lagrangians = list(triangles),list(lagrangians)
-
     print "done with data", get_time_str(time.time()-start)
     return containment,lagrangians,triangles
 
 def build_matrix(containment,lagrangians,triangles):
     start = time.time()
-    shape = len(triangles), len(lagrangians)
+    t,l = count(),count()
+    triangle2row   = dict(izip(triangles,t))
+    lagrangian2col = dict(izip(lagrangians,l))
+    shape = t.next(),l.next()
     print "triangles,lagrangians = ",shape
-    triangle2row   = dict(izip(triangles,xrange(10**100)))
-    lagrangian2col = dict(izip(lagrangians,xrange(10**100)))
 
-    # for triangle,lagrangian in containment:
-    #     matrix[triangle2index  [triangle],
-    #            lagrangian2index[lagrangian]] = 1
     num_ones = len(containment)
     rows,cols = np.array([(triangle2row[i],
                            lagrangian2col[j])
@@ -213,10 +210,14 @@ def tests(matrix,containment):
     x,y = next(iter(containment))
     assert x<y
 
-GENUS=4
+GENUS=3
 
 if __name__=="__main__":
     data = get_data()
     matrix = build_matrix(*data)
-    print "result", mod2rank(matrix.tolil())
+    result = mod2rank(matrix.tolil())
+    print "result", result
+
     tests(matrix,data[0])
+    if GENUS==3: assert result==15
+    if GENUS==4: assert result==51
